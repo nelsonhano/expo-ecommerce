@@ -1,46 +1,45 @@
+import { stripe } from "../config/stripe.js";
 import { Order } from "../models/order.model.js";
-import { Product } from "../models/product.model.js";
 import { Review } from "../models/review.model.js";
 
-export async function createOrder(req, res) {
+const PAYMENT_INTENT_ID = /^pi_[A-Za-z0-9_]+$/;
+
+// GET /api/orders/by-payment/:paymentIntentId
+// Lets the app learn the outcome of a checkout. Owner only, and 404 (never 403) for anyone else
+// or an unknown id, so payment ids can't be probed (spec 0001, AC-8).
+export async function getOrderByPayment(req, res) {
+  const notFound = () => res.status(404).json({ error: "Order not found" });
+
   try {
-    const user = req.user;
-    const { orderItems, shippingAddress, paymentResult, totalPrice } = req.body;
+    const { paymentIntentId } = req.params;
+    if (!PAYMENT_INTENT_ID.test(paymentIntentId)) return notFound();
 
-    if (!orderItems || orderItems.length === 0) {
-      return res.status(400).json({ error: "No order items" });
-    }
-
-    // validate products and stock
-    for (const item of orderItems) {
-      const product = await Product.findById(item.product._id);
-      if (!product) {
-        return res.status(404).json({ error: `Product ${item.name} not found` });
-      }
-      if (product.stock < item.quantity) {
-        return res.status(400).json({ error: `Insufficient stock for ${product.name}` });
-      }
-    }
-
-    const order = await Order.create({
-      user: user._id,
-      clerkId: user.clerkId,
-      orderItems,
-      shippingAddress,
-      paymentResult,
-      totalPrice,
-    });
-
-    // update product stock
-    for (const item of orderItems) {
-      await Product.findByIdAndUpdate(item.product._id, {
-        $inc: { stock: -item.quantity },
+    const order = await Order.findOne({ "paymentResult.id": paymentIntentId, clerkId: req.user.clerkId });
+    if (order) {
+      return res.status(200).json({
+        orderId: order._id,
+        status: order.status,
+        paymentStatus: order.paymentResult.status,
+        cancelReason: order.cancelReason,
       });
     }
 
-    res.status(201).json({ message: "Order created successfully", order });
+    // an order exists but belongs to someone else
+    if (await Order.exists({ "paymentResult.id": paymentIntentId })) return notFound();
+
+    // no order yet: the webhook may still be working on it. check ownership on the intent itself.
+    let paymentIntent;
+    try {
+      paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    } catch (error) {
+      if (error?.statusCode === 404 || error?.code === "resource_missing") return notFound();
+      throw error;
+    }
+    if (paymentIntent.metadata?.clerkId !== req.user.clerkId) return notFound();
+
+    res.status(202).json({ status: "processing" });
   } catch (error) {
-    console.error("Error in createOrder controller:", error);
+    console.error("Error in getOrderByPayment controller:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 }

@@ -1,4 +1,6 @@
+import mongoose from "mongoose";
 import { User } from "../models/user.model.js";
+import { Product } from "../models/product.model.js";
 
 export async function addAddress(req, res) {
   try {
@@ -7,7 +9,8 @@ export async function addAddress(req, res) {
 
     const user = req.user;
 
-    if (!fullName || !streetAddress || !city || !state || !zipCode) {
+    // every field below is required by the address schema
+    if (!label || !fullName || !streetAddress || !city || !state || !zipCode || !phoneNumber) {
       return res.status(400).json({ error: "Missing required address fields" });
     }
 
@@ -92,6 +95,10 @@ export async function deleteAddress(req, res) {
     const { addressId } = req.params;
     const user = req.user;
 
+    if (!mongoose.isValidObjectId(addressId)) {
+      return res.status(404).json({ error: "Address not found" });
+    }
+
     user.addresses.pull(addressId);
     await user.save();
 
@@ -106,6 +113,10 @@ export async function addToWishlist(req, res) {
   try {
     const { productId } = req.body;
     const user = req.user;
+
+    if (!mongoose.isValidObjectId(productId) || !(await Product.exists({ _id: productId }))) {
+      return res.status(404).json({ error: "Product not found" });
+    }
 
     // check if product is already in the wishlist
     if (user.wishlist.includes(productId)) {
@@ -147,7 +158,8 @@ export async function getWishlist(req, res) {
     // we're using populate, bc wishlist is just an array of product ids
     const user = await User.findById(req.user._id).populate("wishlist");
 
-    res.status(200).json({ wishlist: user.wishlist });
+    // populate returns null for products that were deleted - don't send those to the client
+    res.status(200).json({ wishlist: user.wishlist.filter(Boolean) });
   } catch (error) {
     console.error("Error in getWishlist controller:", error);
     res.status(500).json({ error: "Internal server error" });

@@ -1,5 +1,9 @@
 import mongoose from "mongoose";
 
+export const ORDER_STATUSES = ["pending", "shipped", "delivered", "cancelled"];
+export const PAYMENT_STATUSES = ["authorized", "captured", "canceled", "capture_failed"];
+export const CANCEL_REASONS = ["sold_out", "capture_failed", "authorization_expired"];
+
 const orderItemSchema = new mongoose.Schema({
   product: {
     type: mongoose.Schema.Types.ObjectId,
@@ -70,8 +74,12 @@ const orderSchema = new mongoose.Schema(
       required: true,
     },
     paymentResult: {
+      // stripe PaymentIntent id (one order per payment, see the unique index below)
       id: String,
-      status: String,
+      status: {
+        type: String,
+        enum: PAYMENT_STATUSES,
+      },
     },
     totalPrice: {
       type: Number,
@@ -80,8 +88,14 @@ const orderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "shipped", "delivered"],
+      enum: ORDER_STATUSES,
       default: "pending",
+    },
+    // set only when status is "cancelled" (enforced in the pre validate hook below)
+    cancelReason: {
+      type: String,
+      enum: CANCEL_REASONS,
+      default: null,
     },
     deliveredAt: {
       type: Date,
@@ -92,5 +106,17 @@ const orderSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// at most one order per PaymentIntent: a second webhook delivery fails on this key and its
+// transaction rolls back its own stock changes (spec 0001)
+orderSchema.index({ "paymentResult.id": 1 }, { unique: true, sparse: true });
+
+orderSchema.pre("validate", function (next) {
+  const isCancelled = this.status === "cancelled";
+  if (isCancelled !== Boolean(this.cancelReason)) {
+    return next(new Error("cancelReason must be set if and only if the order is cancelled"));
+  }
+  next();
+});
 
 export const Order = mongoose.model("Order", orderSchema);

@@ -51,6 +51,7 @@ const RatingModal = ({
 
               <ScrollView className="mb-4">
                 {order?.orderItems.map((item, index) => {
+                  if (!item.product) return null; // product was deleted - can't be reviewed
                   const productId = item.product._id;
                   const currentRating = productRatings[productId] || 0;
 

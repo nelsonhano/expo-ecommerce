@@ -1,9 +1,18 @@
+import mongoose from "mongoose";
 import { Cart } from "../models/cart.model.js";
 import { Product } from "../models/product.model.js";
+
+const isValidQuantity = (quantity) => Number.isInteger(quantity) && quantity >= 1;
 
 export async function getCart(req, res) {
   try {
     let cart = await Cart.findOne({ clerkId: req.user.clerkId }).populate("items.product");
+
+    // drop items whose product no longer exists (populates to null and would crash the app)
+    if (cart && cart.items.some((item) => !item.product)) {
+      cart.items = cart.items.filter((item) => item.product);
+      await cart.save();
+    }
 
     if (!cart) {
       const user = req.user;
@@ -25,6 +34,14 @@ export async function getCart(req, res) {
 export async function addToCart(req, res) {
   try {
     const { productId, quantity = 1 } = req.body;
+
+    if (!isValidQuantity(quantity)) {
+      return res.status(400).json({ error: "Quantity must be a whole number of at least 1" });
+    }
+
+    if (!mongoose.isValidObjectId(productId)) {
+      return res.status(404).json({ error: "Product not found" });
+    }
 
     // validate product exists and has stock
     const product = await Product.findById(productId);
@@ -51,8 +68,8 @@ export async function addToCart(req, res) {
     // check if item already in the cart
     const existingItem = cart.items.find((item) => item.product.toString() === productId);
     if (existingItem) {
-      // increment quantity by 1
-      const newQuantity = existingItem.quantity + 1;
+      // increment by the requested quantity
+      const newQuantity = existingItem.quantity + quantity;
       if (product.stock < newQuantity) {
         return res.status(400).json({ error: "Insufficient stock" });
       }
@@ -76,8 +93,8 @@ export async function updateCartItem(req, res) {
     const { productId } = req.params;
     const { quantity } = req.body;
 
-    if (quantity < 1) {
-      return res.status(400).json({ error: "Quantity must be at least 1" });
+    if (!isValidQuantity(quantity)) {
+      return res.status(400).json({ error: "Quantity must be a whole number of at least 1" });
     }
 
     const cart = await Cart.findOne({ clerkId: req.user.clerkId });

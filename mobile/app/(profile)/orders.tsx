@@ -10,6 +10,8 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
 
+const CONFIRMING_COLOR = "#00D9FF";
+
 function OrdersScreen() {
   const { data: orders, isLoading, isError } = useOrders();
   const { createReviewAsync, isCreatingReview } = useReviews();
@@ -23,10 +25,10 @@ function OrdersScreen() {
     setSelectedOrder(order);
 
     // init ratings for all product to 0 - resettin the state for each product
+    // (items whose product was deleted can't be reviewed, so they're skipped)
     const initialRatings: { [key: string]: number } = {};
     order.orderItems.forEach((item) => {
-      const productId = item.product._id;
-      initialRatings[productId] = 0;
+      if (item.product) initialRatings[item.product._id] = 0;
     });
     setProductRatings(initialRatings);
   };
@@ -42,14 +44,18 @@ function OrdersScreen() {
     }
 
     try {
+      // the callback must RETURN the promise - otherwise Promise.all resolves immediately,
+      // "success" is shown even when the requests fail, and errors are never caught
       await Promise.all(
-        selectedOrder.orderItems.map((item) => {
-          createReviewAsync({
-            productId: item.product._id,
-            orderId: selectedOrder._id,
-            rating: productRatings[item.product._id],
-          });
-        })
+        selectedOrder.orderItems
+          .filter((item) => item.product)
+          .map((item) =>
+            createReviewAsync({
+              productId: item.product!._id,
+              orderId: selectedOrder._id,
+              rating: productRatings[item.product!._id],
+            })
+          )
       );
 
       Alert.alert("Success", "Thank you for rating all products!");
@@ -87,6 +93,11 @@ function OrdersScreen() {
             {orders.map((order) => {
               const totalItems = order.orderItems.reduce((sum, item) => sum + item.quantity, 0);
               const firstImage = order.orderItems[0]?.image || "";
+              // "authorized": the webhook reserved stock and is still capturing (AC-11)
+              const isConfirming = order.paymentResult?.status === "authorized";
+              const isCancelled = order.status === "cancelled";
+              const badgeColor = isConfirming ? CONFIRMING_COLOR : getStatusColor(order.status);
+              const badgeLabel = isConfirming ? "Confirming" : capitalizeFirstLetter(order.status);
 
               return (
                 <View key={order._id} className="bg-surface rounded-3xl p-5 mb-4">
@@ -117,17 +128,25 @@ function OrdersScreen() {
                       </Text>
                       <View
                         className="self-start px-3 py-1.5 rounded-full"
-                        style={{ backgroundColor: getStatusColor(order.status) + "20" }}
+                        style={{ backgroundColor: badgeColor + "20" }}
                       >
-                        <Text
-                          className="text-xs font-bold"
-                          style={{ color: getStatusColor(order.status) }}
-                        >
-                          {capitalizeFirstLetter(order.status)}
+                        <Text className="text-xs font-bold" style={{ color: badgeColor }}>
+                          {badgeLabel}
                         </Text>
                       </View>
                     </View>
                   </View>
+
+                  {isCancelled && (
+                    <View className="flex-row items-center bg-red-500/10 rounded-2xl px-3 py-2.5 mb-3">
+                      <Ionicons name="information-circle-outline" size={18} color="#EF4444" />
+                      <Text className="text-text-primary text-sm ml-2 flex-1">
+                        {order.cancelReason === "sold_out"
+                          ? "Sold out while you were paying. You were not charged."
+                          : "Payment didn't go through. You were not charged."}
+                      </Text>
+                    </View>
+                  )}
 
                   {/* ORDER ITEMS SUMMARY */}
                   {order.orderItems.map((item, index) => (

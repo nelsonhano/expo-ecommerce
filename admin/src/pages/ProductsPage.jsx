@@ -4,6 +4,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { productApi } from "../lib/api";
 import { getStockStatusBadge } from "../lib/utils";
 
+// must match the categories the mobile app filters by (mobile/app/(tabs)/index.tsx) and the seed data
+const CATEGORIES = ["Electronics", "Fashion", "Sports", "Books"];
+
+const showError = (fallback) => (error) =>
+  alert(error?.response?.data?.message || error?.response?.data?.error || fallback);
+
 function ProductsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -20,7 +26,11 @@ function ProductsPage() {
   const queryClient = useQueryClient();
 
   // fetch some data
-  const { data: products = [] } = useQuery({
+  const {
+    data: products = [],
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ["products"],
     queryFn: productApi.getAll,
   });
@@ -31,7 +41,9 @@ function ProductsPage() {
     onSuccess: () => {
       closeModal();
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboardStats"] });
     },
+    onError: showError("Failed to create product"),
   });
 
   const updateProductMutation = useMutation({
@@ -40,15 +52,23 @@ function ProductsPage() {
       closeModal();
       queryClient.invalidateQueries({ queryKey: ["products"] });
     },
+    onError: showError("Failed to update product"),
   });
 
   const deleteProductMutation = useMutation({
     mutationFn: productApi.delete,
     onSuccess: () => {
-      closeModal();
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboardStats"] });
     },
+    onError: showError("Failed to delete product"),
   });
+
+  const handleDelete = (product) => {
+    if (confirm(`Delete "${product.name}"? This cannot be undone.`)) {
+      deleteProductMutation.mutate(product._id);
+    }
+  };
 
   const closeModal = () => {
     // reset the state
@@ -130,6 +150,20 @@ function ProductsPage() {
         </button>
       </div>
 
+      {isLoading && (
+        <div className="flex justify-center py-12">
+          <span className="loading loading-spinner loading-lg" />
+        </div>
+      )}
+      {isError && (
+        <div className="alert alert-error">Failed to load products. Please refresh the page.</div>
+      )}
+      {!isLoading && !isError && products.length === 0 && (
+        <div className="text-center py-12 text-base-content/60">
+          No products yet - click &quot;Add Product&quot; to create one
+        </div>
+      )}
+
       {/* PRODUCTS GRID */}
       <div className="grid grid-cols-1 gap-4">
         {products?.map((product) => {
@@ -174,9 +208,11 @@ function ProductsPage() {
                     </button>
                     <button
                       className="btn btn-square btn-ghost text-error"
-                      onClick={() => deleteProductMutation.mutate(product._id)}
+                      onClick={() => handleDelete(product)}
+                      disabled={deleteProductMutation.isPending}
                     >
-                      {deleteProductMutation.isPending ? (
+                      {deleteProductMutation.isPending &&
+                        deleteProductMutation.variables === product._id ? (
                         <span className="loading loading-spinner"></span>
                       ) : (
                         <Trash2Icon className="w-5 h-5" />
@@ -192,7 +228,7 @@ function ProductsPage() {
 
       {/* ADD/EDIT PRODUCT MODAL */}
 
-      <input type="checkbox" className="modal-toggle" checked={showModal} />
+      <input type="checkbox" className="modal-toggle" checked={showModal} readOnly />
 
       <div className="modal">
         <div className="modal-box max-w-2xl">
@@ -234,10 +270,13 @@ function ProductsPage() {
                   required
                 >
                   <option value="">Select category</option>
-                  <option value="Electronics">Electronics</option>
-                  <option value="Accessories">Accessories</option>
-                  <option value="Fashion">Fashion</option>
-                  <option value="Sports">Sports</option>
+                  {Array.from(
+                    new Set([...CATEGORIES, ...(formData.category ? [formData.category] : [])])
+                  ).map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -250,6 +289,7 @@ function ProductsPage() {
                 <input
                   type="number"
                   step="0.01"
+                  min="0"
                   placeholder="0.00"
                   className="input input-bordered"
                   value={formData.price}
@@ -264,6 +304,8 @@ function ProductsPage() {
                 </label>
                 <input
                   type="number"
+                  min="0"
+                  step="1"
                   placeholder="0"
                   className="input input-bordered"
                   value={formData.stock}

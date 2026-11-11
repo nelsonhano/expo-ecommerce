@@ -11,9 +11,30 @@ export const getOrderStatusBadge = (status) => {
       return "badge-info";
     case "pending":
       return "badge-warning";
+    case "cancelled":
+      return "badge-error";
     default:
       return "badge-ghost";
   }
+};
+
+const CANCEL_REASON_LABELS = {
+  sold_out: "sold out",
+  capture_failed: "payment failed",
+  authorization_expired: "authorization expired",
+};
+
+// orders that can't move through fulfilment get a fixed badge instead of the status dropdown
+// (spec 0001, AC-10 / AC-11). Returns null for a captured order the admin can update.
+export const getLockedOrderBadge = (order) => {
+  if (order.status === "cancelled") {
+    const reason = CANCEL_REASON_LABELS[order.cancelReason];
+    return { text: reason ? `Cancelled (${reason})` : "Cancelled", class: "badge-error" };
+  }
+  if (order.paymentResult?.status === "authorized") {
+    return { text: "Awaiting capture", class: "badge-warning" };
+  }
+  return null;
 };
 
 export const getStockStatusBadge = (stock) => {

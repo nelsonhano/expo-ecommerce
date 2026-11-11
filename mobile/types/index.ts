@@ -51,18 +51,34 @@ export interface Order {
   };
   paymentResult: {
     id: string;
-    status: string;
+    status: PaymentStatus;
   };
   totalPrice: number;
-  status: "pending" | "shipped" | "delivered";
+  status: "pending" | "shipped" | "delivered" | "cancelled";
+  // set only when status is "cancelled"
+  cancelReason: CancelReason | null;
   hasReviewed: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
+export type PaymentStatus = "authorized" | "captured" | "canceled" | "capture_failed";
+export type CancelReason = "sold_out" | "capture_failed" | "authorization_expired";
+
+// GET /orders/by-payment/:paymentIntentId (200 once the webhook saved the order, 202 before)
+export type PaymentOutcome =
+  | { status: "processing" }
+  | {
+      orderId: string;
+      status: Order["status"];
+      paymentStatus: PaymentStatus;
+      cancelReason: CancelReason | null;
+    };
+
 export interface OrderItem {
   _id: string;
-  product: Product;
+  // null when the product has since been deleted by an admin
+  product: Product | null;
   name: string;
   price: number;
   quantity: number;

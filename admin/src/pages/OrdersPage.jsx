@@ -1,5 +1,5 @@
 import { orderApi } from "../lib/api";
-import { formatDate } from "../lib/utils";
+import { formatDate, getLockedOrderBadge } from "../lib/utils";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -17,6 +17,8 @@ function OrdersPage() {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["dashboardStats"] });
     },
+    onError: (error) =>
+      alert(error?.response?.data?.error || "Failed to update order status"),
   });
 
   const handleStatusChange = (orderId, newStatus) => {
@@ -65,6 +67,7 @@ function OrdersPage() {
                       (sum, item) => sum + item.quantity,
                       0
                     );
+                    const lockedBadge = getLockedOrderBadge(order);
 
                     return (
                       <tr key={order._id}>
@@ -92,16 +95,22 @@ function OrdersPage() {
                         </td>
 
                         <td>
-                          <select
-                            value={order.status}
-                            onChange={(e) => handleStatusChange(order._id, e.target.value)}
-                            className="select select-sm"
-                            disabled={updateStatusMutation.isPending}
-                          >
-                            <option value="pending">Pending</option>
-                            <option value="shipped">Shipped</option>
-                            <option value="delivered">Delivered</option>
-                          </select>
+                          {lockedBadge ? (
+                            <span className={`badge ${lockedBadge.class} whitespace-nowrap`}>
+                              {lockedBadge.text}
+                            </span>
+                          ) : (
+                            <select
+                              value={order.status}
+                              onChange={(e) => handleStatusChange(order._id, e.target.value)}
+                              className="select select-sm"
+                              disabled={updateStatusMutation.isPending}
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="shipped">Shipped</option>
+                              <option value="delivered">Delivered</option>
+                            </select>
+                          )}
                         </td>
 
                         <td>

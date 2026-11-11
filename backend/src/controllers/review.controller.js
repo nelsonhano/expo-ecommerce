@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Order } from "../models/order.model.js";
 import { Product } from "../models/product.model.js";
 import { Review } from "../models/review.model.js";
@@ -6,8 +7,12 @@ export async function createReview(req, res) {
   try {
     const { productId, orderId, rating } = req.body;
 
-    if (!rating || rating < 1 || rating > 5) {
-      return res.status(400).json({ error: "Rating must be between 1 and 5" });
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: "Rating must be a whole number between 1 and 5" });
+    }
+
+    if (!mongoose.isValidObjectId(productId) || !mongoose.isValidObjectId(orderId)) {
+      return res.status(400).json({ error: "A valid productId and orderId are required" });
     }
 
     const user = req.user;
@@ -70,6 +75,10 @@ export async function deleteReview(req, res) {
     const { reviewId } = req.params;
 
     const user = req.user;
+
+    if (!mongoose.isValidObjectId(reviewId)) {
+      return res.status(404).json({ error: "Review not found" });
+    }
 
     const review = await Review.findById(reviewId);
     if (!review) {

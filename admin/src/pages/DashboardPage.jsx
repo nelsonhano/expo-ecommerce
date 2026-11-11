@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { orderApi, statsApi } from "../lib/api";
 import { DollarSignIcon, PackageIcon, ShoppingBagIcon, UsersIcon } from "lucide-react";
-import { capitalizeText, formatDate, getOrderStatusBadge } from "../lib/utils";
+import { capitalizeText, formatDate, getLockedOrderBadge, getOrderStatusBadge } from "../lib/utils";
 
 function DashboardPage() {
   const { data: ordersData, isLoading: ordersLoading } = useQuery({
@@ -80,43 +80,48 @@ function DashboardPage() {
                 </thead>
 
                 <tbody>
-                  {recentOrders.map((order) => (
-                    <tr key={order._id}>
-                      <td>
-                        <span className="font-medium">#{order._id.slice(-8).toUpperCase()}</span>
-                      </td>
+                  {recentOrders.map((order) => {
+                    const lockedBadge = getLockedOrderBadge(order);
+                    return (
+                      <tr key={order._id}>
+                        <td>
+                          <span className="font-medium">#{order._id.slice(-8).toUpperCase()}</span>
+                        </td>
 
-                      <td>
-                        <div>
-                          <div className="font-medium">{order.shippingAddress.fullName}</div>
-                          <div className="text-sm opacity-60">
-                            {order.orderItems.length} item(s)
+                        <td>
+                          <div>
+                            <div className="font-medium">{order.shippingAddress.fullName}</div>
+                            <div className="text-sm opacity-60">
+                              {order.orderItems.length} item(s)
+                            </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td>
-                        <div className="text-sm">
-                          {order.orderItems[0]?.name}
-                          {order.orderItems.length > 1 && ` +${order.orderItems.length - 1} more`}
-                        </div>
-                      </td>
+                        <td>
+                          <div className="text-sm">
+                            {order.orderItems[0]?.name}
+                            {order.orderItems.length > 1 && ` +${order.orderItems.length - 1} more`}
+                          </div>
+                        </td>
 
-                      <td>
-                        <span className="font-semibold">${order.totalPrice.toFixed(2)}</span>
-                      </td>
+                        <td>
+                          <span className="font-semibold">${order.totalPrice.toFixed(2)}</span>
+                        </td>
 
-                      <td>
-                        <div className={`badge ${getOrderStatusBadge(order.status)}`}>
-                          {capitalizeText(order.status)}
-                        </div>
-                      </td>
+                        <td>
+                          <div
+                            className={`badge ${lockedBadge?.class ?? getOrderStatusBadge(order.status)}`}
+                          >
+                            {lockedBadge?.text ?? capitalizeText(order.status)}
+                          </div>
+                        </td>
 
-                      <td>
-                        <span className="text-sm opacity-60">{formatDate(order.createdAt)}</span>
-                      </td>
-                    </tr>
-                  ))}
+                        <td>
+                          <span className="text-sm opacity-60">{formatDate(order.createdAt)}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
