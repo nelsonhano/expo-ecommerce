@@ -6,8 +6,8 @@ React Native Expo mobile client for customer ecommerce shopping. Provides produc
 
 ## Stack
 
-- **Framework**: React Native 0.81, Expo SDK 54
-- **Routing**: Expo Router v6 (file based navigation)
+- **Framework**: React Native 0.88, Expo SDK 58
+- **Routing**: Expo Router v58 (file based navigation)
 - **Styling**: NativeWind v4, Tailwind CSS v3
 - **Authentication**: Clerk Expo, Expo SecureStore
 - **Payments**: Stripe React Native SDK

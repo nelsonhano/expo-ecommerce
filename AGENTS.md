@@ -3,7 +3,7 @@
 ## Stack
 
 - **Language / Runtime**: Node.js, JavaScript, TypeScript
-- **Frameworks**: Express 5, React 19 (Vite), Expo SDK 54 (React Native)
+- **Frameworks**: Express 5, React 19 (Vite), Expo SDK 58 (React Native)
 - **Key dependencies**: MongoDB (Mongoose), Clerk, Stripe, Inngest, Cloudinary, TanStack Query, Tailwind CSS
 - **Package manager**: npm
 
